@@ -181,9 +181,9 @@
              js2-mode             ; Improved JavaScript editing mode
              magit                ; control Git from Emacs
              markdown-mode        ; Emacs Major mode for Markdown-formatted files
+             material-theme       ; A Theme based on Google Material Design
              matlab-mode          ; MATLAB integration with Emacs
              maude-mode           ; Emacs mode for the programming language Maude
-             monokai-theme        ; A fruity color theme for Emacs
              multiple-cursors     ; Multiple cursors for Emacs
              olivetti             ; Minor mode for a nice writing environment
              org                  ; Outline-based notes management and organizer
@@ -391,7 +391,7 @@
    #+BEGIN_SRC emacs-lisp
    (defun cycle-themes ()
      "Returns a function that lets you cycle your themes."
-     (lexical-let ((themes '#1=(leuven monokai . #1#)))
+     (lexical-let ((themes '#1=(leuven material . #1#)))
        (lambda ()
          (interactive)
          ;; Rotates the thme cycle and changes the current theme.
@@ -881,32 +881,36 @@
      (mapc 'disable-theme custom-enabled-themes))
    #+END_SRC
 
-** Presentation-mode
+** global-scale-mode
 
-   When giving talks it's nice to be able to adjust the size of everything
-   (not just a buffer like ~text-scale-mode~ provides). This is not a
-   particularly neat solution, but it works OK. It simply
-   increases/decreases the size of the font. It assumes that your using
-   Inconsolata with size 14 by default. This should be probably be
-   generalized (or maybe be substituted by a package if it's out there).
+   These functions provide something close to ~text-scale-mode~, but for every
+   buffer, including the minibuffer and mode line.
 
    #+BEGIN_SRC emacs-lisp
-   (defun global-scale-default ()
-     (interactive)
-     (set-face-attribute 'default nil :font "Inconsolata-14"))
+   (lexical-let* ((default (face-attribute 'default :height))
+                  (size default))
 
-   (lexical-let ((size 14))
+     (defun global-scale-default ()
+       (interactive)
+       (setq size default)
+       (global-scale-internal size))
+
      (defun global-scale-up ()
        (interactive)
-       (set-face-attribute
-        'default nil
-        :font (concat "Inconsolata-" (number-to-string (incf size)))))
+       (global-scale-internal (incf size 20)))
 
      (defun global-scale-down ()
        (interactive)
-       (set-face-attribute
-        'default nil
-        :font (concat "Inconsolata-" (number-to-string (decf size))))))
+       (global-scale-internal (decf size 20)))
+
+     (defun global-scale-internal (arg)
+       (set-face-attribute 'default (selected-frame) :height arg)
+       (set-temporary-overlay-map
+        (let ((map (make-sparse-keymap)))
+          (define-key map (kbd "C-=") 'global-scale-up)
+          (define-key map (kbd "C-+") 'global-scale-up)
+          (define-key map (kbd "C--") 'global-scale-down)
+          (define-key map (kbd "C-0") 'global-scale-default) map))))
    #+END_SRC
 
 * Mode specific
@@ -1239,20 +1243,20 @@
     "A keymap for custom bindings.")
   #+END_SRC
 
-  Bindings for [[https://github.com/abo-abo/define-word][define-word]].
+** Bindings for [[https://github.com/abo-abo/define-word][define-word]]
 
   #+BEGIN_SRC emacs-lisp
   (define-key custom-bindings-map (kbd "C-c D") 'define-word-at-point)
   #+END_SRC
 
-  Bindings for [[https://github.com/magnars/expand-region.el][expand-region]].
+** Bindings for [[https://github.com/magnars/expand-region.el][expand-region]]
 
   #+BEGIN_SRC emacs-lisp
   (define-key custom-bindings-map (kbd "C->")  'er/expand-region)
   (define-key custom-bindings-map (kbd "C-<")  'er/contract-region)
   #+END_SRC
 
-  Bindings for [[https://github.com/magnars/multiple-cursors.el][multiple-cursors]].
+** Bindings for [[https://github.com/magnars/multiple-cursors.el][multiple-cursors]]
 
   #+BEGIN_SRC emacs-lisp
   (define-key custom-bindings-map (kbd "C-c e")  'mc/edit-lines)
@@ -1260,13 +1264,13 @@
   (define-key custom-bindings-map (kbd "C-c n")  'mc/mark-next-like-this)
   #+END_SRC
 
-  Bindings for [[http://magit.github.io][Magit]].
+** Bindings for [[http://magit.github.io][Magit]]
 
   #+BEGIN_SRC emacs-lisp
   (define-key custom-bindings-map (kbd "C-c m") 'magit-status)
   #+END_SRC
 
-  Bindings for [[http://company-mode.github.io/][company-mode]].
+** Bindings for [[http://company-mode.github.io/][company-mode]]
 
   #+BEGIN_SRC emacs-lisp
   (define-key company-active-map (kbd "C-d") 'company-show-doc-buffer)
@@ -1278,7 +1282,7 @@
   (define-key company-active-map (kbd "C-:") 'helm-company)
   #+END_SRC
 
-  Bindings for [[http://emacs-helm.github.io/helm/][Helm]].
+** Bindings for [[http://emacs-helm.github.io/helm/][Helm]]
 
   #+BEGIN_SRC emacs-lisp
   (define-key custom-bindings-map (kbd "C-c h")   'helm-command-prefix)
@@ -1296,21 +1300,26 @@
   (define-key helm-map (kbd "C-z")   'helm-select-action)
   #+END_SRC
 
-  Bind some native Emacs functions.
+** Bindings for built-ins
 
   #+BEGIN_SRC emacs-lisp
-  (define-key custom-bindings-map (kbd "M-u")      'upcase-dwim)
-  (define-key custom-bindings-map (kbd "M-c")      'capitalize-dwim)
-  (define-key custom-bindings-map (kbd "M-l")      'downcase-dwim)
-  (define-key custom-bindings-map (kbd "C-j")      'newline-and-indent)
-  (define-key custom-bindings-map (kbd "C-c s")    'ispell-word)
-  (define-key custom-bindings-map (kbd "C-c c")    'org-capture)
-  (define-key custom-bindings-map (kbd "C-x m")    'mu4e)
+  (define-key custom-bindings-map (kbd "M-u")         'upcase-dwim)
+  (define-key custom-bindings-map (kbd "M-c")         'capitalize-dwim)
+  (define-key custom-bindings-map (kbd "M-l")         'downcase-dwim)
+  (define-key custom-bindings-map (kbd "M-]")         'other-frame)
+  (define-key custom-bindings-map (kbd "C-j")         'newline-and-indent)
+  (define-key custom-bindings-map (kbd "C-c s")       'ispell-word)
+  (define-key custom-bindings-map (kbd "C-c c")       'org-capture)
+  (define-key custom-bindings-map (kbd "C-x m")       'mu4e)
+  (define-key custom-bindings-map (kbd "C-c <up>")    'windmove-up)
+  (define-key custom-bindings-map (kbd "C-c <down>")  'windmove-down)
+  (define-key custom-bindings-map (kbd "C-c <left>")  'windmove-left)
+  (define-key custom-bindings-map (kbd "C-c <right>") 'windmove-right)
   (define-key custom-bindings-map (kbd "C-c t")
     (lambda () (interactive) (org-agenda nil "n")))
   #+END_SRC
 
-  Bind the functions defined [[sec:defuns][above]].
+** Bindings for functions defined [[sec:defuns][above]].
 
   #+BEGIN_SRC emacs-lisp
   (define-key global-map          (kbd "M-p")     'jump-to-previous-like-this)
@@ -1321,11 +1330,17 @@
   (define-key custom-bindings-map (kbd "C-x k")   'kill-this-buffer-unless-scratch)
   (define-key custom-bindings-map (kbd "C-c C-0") 'global-scale-default)
   (define-key custom-bindings-map (kbd "C-c C-=") 'global-scale-up)
+  (define-key custom-bindings-map (kbd "C-c C-+") 'global-scale-up)
   (define-key custom-bindings-map (kbd "C-c C--") 'global-scale-down)
   (define-key custom-bindings-map (kbd "C-x t")   'toggle-shell)
   (define-key custom-bindings-map (kbd "C-c j")   'cycle-spacing-delete-newlines)
   (define-key custom-bindings-map (kbd "C-c d")   'duplicate-thing)
   (define-key custom-bindings-map (kbd "<C-tab>") 'tidy)
+  (define-key custom-bindings-map (kbd "C-c C-q")
+    '(lambda ()
+       (interactive)
+       (focus-mode 1)
+       (focus-read-only-mode 1)))
   (with-eval-after-load 'org
     (define-key org-mode-map (kbd "C-'") 'org-sync-pdf))
   #+END_SRC
