@@ -93,6 +93,13 @@
    git update-index --no-assume-unchanged init.el
    #+END_SRC
 
+   I want lexical scoping for the init-file, which can be specified in the
+   header. The first line of the configuration is as follows:
+
+   #+BEGIN_SRC emacs-lisp
+   ;;; -*- lexical-binding: t -*-
+   #+END_SRC
+
    The =init.el= should (after the first run) mirror the source blocks in
    the =init.org=. We can use =C-c C-v t= to run =org-babel-tangle=, which
    extracts the code blocks from the current file into a source-specific
@@ -146,11 +153,8 @@
    archive and is well maintained.
 
    #+BEGIN_SRC emacs-lisp
-   (setq package-archives
-         '(("gnu" . "http://elpa.gnu.org/packages/")
-           ("org" . "http://orgmode.org/elpa/")
-           ("melpa" . "https://melpa.org/packages/")
-           ("melpa-stable" . "https://stable.melpa.org/packages/")))
+   (add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/"))
+   (add-to-list 'package-archives '("melpa-stable" . "https://stable.melpa.org/packages/"))
 
    (add-to-list 'package-pinned-packages '(cider . "melpa-stable") t)
    #+END_SRC
@@ -159,13 +163,16 @@
    installed. To ensure we install missing packages if they are missing.
 
    #+BEGIN_SRC emacs-lisp
-   (let* ((packages
+   (let* ((package--builtins nil)
+          (packages
            '(auto-compile         ; automatically compile Emacs Lisp libraries
              cider                ; Clojure Interactive Development Environment
+             clj-refactor         ; A collection of clojure refactoring functions
              company              ; Modular text completion framework
              define-word          ; display the definition of word at point
              diminish             ; Diminished modes from modeline
              drag-stuff           ; Drag stuff around in Emacs
+             erlang               ; Erlang major mode
              expand-region        ; Increase selected region by semantic units
              focus                ; Dim color of text in surrounding sections
              idle-require         ; load elisp libraries while Emacs is idle
@@ -174,7 +181,9 @@
              golden-ratio         ; Automatic resizing windows to golden ratio
              haskell-mode         ; A Haskell editing mode
              helm                 ; Incremental and narrowing framework
+             helm-ag              ; the silver searcher with helm interface
              helm-company         ; Helm interface for company-mode
+             helm-dash            ; Offline documentation using Dash docsets.
              helm-projectile      ; Helm integration for Projectile
              helm-swoop           ; Efficiently hopping squeezed lines
              jedi                 ; Python auto-completion for Emacs
@@ -187,19 +196,22 @@
              multiple-cursors     ; Multiple cursors for Emacs
              olivetti             ; Minor mode for a nice writing environment
              org                  ; Outline-based notes management and organizer
+             org-ref              ; citations bibliographies in org-mode
              paredit              ; minor mode for editing parentheses
              pdf-tools            ; Emacs support library for PDF files
              projectile           ; Manage and navigate projects in Emacs easily
              slime                ; Superior Lisp Interaction Mode for Emacs
-             try))                ; Try out Emacs packages
-          ;; Remove all packages already installed
-          (packages (remove-if 'package-installed-p packages)))
-     (when packages
-       (ignore-errors (package-refresh-contents)
-                      (mapcar 'package-install packages)
-                      ;; This package is only relevant for Mac OS X.
-                      (when (memq window-system '(mac ns))
-                        (package-install 'exec-path-from-shell)))))
+             try                  ; Try out Emacs packages
+             which-key)))         ; Display available keybindings in popup
+     (ignore-errors ;; This package is only relevant for Mac OS X.
+       (when (memq window-system '(mac ns))
+         (push 'exec-path-from-shell packages)
+         (push 'reveal-in-osx-finder packages))
+       (let ((packages (remove-if 'package-installed-p packages)))
+         (when packages
+           ;; Install uninstalled packages
+           (package-refresh-contents)
+           (mapc 'package-install packages)))))
    #+END_SRC
 
 ** Mac OS X
@@ -217,7 +229,9 @@
            mac-option-modifier nil
            mac-command-modifier 'meta
            x-select-enable-clipboard t)
-     (exec-path-from-shell-initialize))
+     (exec-path-from-shell-initialize)
+     (when (fboundp 'mac-auto-operator-composition-mode)
+       (mac-auto-operator-composition-mode 1)))'
    #+END_SRC
 
 ** Require
@@ -276,7 +290,8 @@
    (setq-default fill-column 79                    ; Maximum line width
                  truncate-lines t                  ; Don't fold lines
                  indent-tabs-mode nil              ; Use spaces instead of tabs
-                 split-width-threshold 100         ; Split verticly by default
+                 split-width-threshold 160         ; Split verticly by default
+                 split-height-threshold nil        ; Split verticly by default
                  auto-fill-function 'do-auto-fill) ; Auto-fill-mode everywhere
    #+END_SRC
 
@@ -365,16 +380,15 @@
               global-company-mode          ; Auto-completion everywhere
               global-git-gutter-mode       ; Show changes latest commit
               global-prettify-symbols-mode ; Greek letters should look greek
-              golden-ratio-mode            ; Automatic resizing of windows
               projectile-global-mode       ; Manage and navigate projects
               recentf-mode                 ; Recently opened files
-              show-paren-mode))            ; Highlight matching parentheses
+              show-paren-mode              ; Highlight matching parentheses
+              which-key-mode))             ; Available keybindings in popup
      (funcall mode 1))
 
    (when (version< emacs-version "24.4")
      (eval-after-load 'auto-compile
        '((auto-compile-on-save-mode 1))))  ; compile .el files on save
-
    #+END_SRC
 
 ** Visual
@@ -401,8 +415,8 @@
    Use the [[http://www.levien.com/type/myfonts/inconsolata.html][Inconsolata]] font if it's installed on the system.
 
    #+BEGIN_SRC emacs-lisp
-   (cond ((member "Source Code Pro" (font-family-list))
-          (set-face-attribute 'default nil :font "Source Code Pro-13"))
+   (cond ((member "Hasklig" (font-family-list))
+          (set-face-attribute 'default nil :font "Hasklig-14"))
          ((member "Inconsolata" (font-family-list))
           (set-face-attribute 'default nil :font "Inconsolata-14")))
    #+END_SRC
@@ -523,6 +537,22 @@
    (helm-projectile-on)
    (helm-adaptive-mode 1)
    #+END_SRC
+
+*** Helm dash
+
+    #+BEGIN_SRC emacs-lisp
+    (setq helm-dash-browser-func 'eww)
+    (add-hook 'emacs-lisp-mode-hook
+              (lambda () (setq-local helm-dash-docsets '("Emacs Lisp"))))
+    (add-hook 'erlang-mode-hook
+              (lambda () (setq-local helm-dash-docsets '("Erlang"))))
+    (add-hook 'java-mode-hook
+              (lambda () (setq-local helm-dash-docsets '("Java"))))
+    (add-hook 'haskell-mode-hook
+              (lambda () (setq-local helm-dash-docsets '("Haskell"))))
+    (add-hook 'clojure-mode-hook
+              (lambda () (setq-local helm-dash-docsets '("Clojure"))))
+    #+END_SRC
 
 ** Calendar
 
@@ -914,21 +944,56 @@
    #+END_SRC
 
 * Mode specific
-** Shell
+** Compilation
 
-   I use =shell= whenever i want to use access the command line in Emacs. I
-   keep a symlink between my =~/.bash_profile= (because I run OS X) and
-   =~/.emacs_bash=, to make the transition between my standard terminal and
-   the shell as small as possible. To be able to quickly switch back and
-   forth between a shell I make use of this little function.
+   I often run ~latexmk -pdf -pvc~ in a compilation buffer, which recompiles
+   the latex-file whenever it is changed. This often results in annoyingly
+   large compilation buffers; the following snippet limits the buffer size in
+   accordance with ~comint-buffer-maximum-size~, which defaults to 1024 lines.
 
    #+BEGIN_SRC emacs-lisp
-   (defun toggle-shell ()
-     "Jumps to eshell or back."
-     (interactive)
-     (if (string= (buffer-name) "*shell*")
-         (switch-to-prev-buffer)
-       (shell)))
+   (add-hook 'compilation-filter-hook 'comint-truncate-buffer)
+   #+END_SRC
+
+** Shell
+
+   Inspired by [[https://github.com/torenord/.emacs.d][torenord]], I maintain quick access to shell buffers with bindings
+   ~M-1~ to ~M-9~. In addition, the ~M-§~ (on an international English
+   keyboard) is bound toggle between the last visited shell, and the last
+   visited non-shell buffer. The following functions facilitate this, and are
+   bound in the [[Key bindings]] section.
+
+   #+BEGIN_SRC emacs-lisp
+   (lexical-let ((last-shell ""))
+     (defun toggle-shell ()
+       (interactive)
+       (cond ((string-match-p "^\\*shell<[1-9][0-9]*>\\*$" (buffer-name))
+              (goto-non-shell-buffer))
+             ((get-buffer last-shell) (switch-to-buffer last-shell))
+             (t (shell (setq last-shell "*shell<1>*")))))
+
+     (defun switch-shell (n)
+       (let ((buffer-name (format "*shell<%d>*" n)))
+         (setq last-shell buffer-name)
+         (cond ((get-buffer buffer-name)
+                (switch-to-buffer buffer-name))
+               (t (shell buffer-name)
+                  (rename-buffer buffer-name)))))
+
+     (defun goto-non-shell-buffer ()
+       (let* ((r "^\\*shell<[1-9][0-9]*>\\*$")
+              (shell-buffer-p (lambda (b) (string-match-p r (buffer-name b))))
+              (non-shells (cl-remove-if shell-buffer-p (buffer-list))))
+         (when non-shells
+           (switch-to-buffer (first non-shells))))))
+   #+END_SRC
+
+   Don't query whether or not the ~shell~-buffer should be killed, just kill
+   it.
+
+   #+BEGIN_SRC emacs-lisp
+   (defadvice shell (after kill-with-no-query nil activate)
+     (set-process-query-on-exit-flag (get-buffer-process ad-return-value) nil))
    #+END_SRC
 
    I'd like the =C-l= to work more like the standard terminal (which works
@@ -947,9 +1012,8 @@
        (comint-truncate-buffer)))
    #+END_SRC
 
-   Lastly we should bind our functions. The =toggle-shell= should be a
-   global binding (because we want to be able to switch to a shell from any
-   buffer), but the =clear-shell= should only affect =shell-mode=.
+   The =clear-shell= should only be bound in =comint-mode=, which is a mode
+   most shell and REPL's is derived from.
 
    #+BEGIN_SRC emacs-lisp
    (add-hook 'comint-mode-hook (lambda () (local-set-key (kbd "C-l") 'clear-comint)))
@@ -981,6 +1045,19 @@
     #+BEGIN_SRC emacs-lisp
     (add-hook 'emacs-lisp-mode-hook 'turn-on-eldoc-mode)
     (add-hook 'lisp-interaction-mode-hook 'turn-on-eldoc-mode)
+    #+END_SRC
+
+*** Clojure
+
+    #+BEGIN_SRC emacs-lisp
+    (add-hook 'cider-repl-mode-hook (lambda () (local-set-key (kbd "C-l") 'cider-repl-clear-buffer)))
+    #+END_SRC
+
+    #+BEGIN_SRC emacs-lisp
+    (setq cider-cljs-lein-repl
+          "(do (require 'figwheel-sidecar.repl-api)
+               (figwheel-sidecar.repl-api/start-figwheel!)
+               (figwheel-sidecar.repl-api/cljs-repl))")
     #+END_SRC
 
 *** Common lisp
@@ -1141,6 +1218,13 @@
                       ("\\subsubsection{%s}" . "\\subsubsection*{%s}")
                       ("\\paragraph{%s}" . "\\paragraph*{%s}")
                       ("\\subparagraph{%s}" . "\\subparagraph*{%s}")))
+        (add-to-list 'org-latex-classes
+                     '("easychair" "\\documentclass{easychair}"
+                      ("\\section{%s}" . "\\section*{%s}")
+                      ("\\subsection{%s}" . "\\subsection*{%s}")
+                      ("\\subsubsection{%s}" . "\\subsubsection*{%s}")
+                      ("\\paragraph{%s}" . "\\paragraph*{%s}")
+                      ("\\subparagraph{%s}" . "\\subparagraph*{%s}")))
        (custom-set-variables '(org-export-allow-bind-keywords t))))
    #+END_SRC
 
@@ -1183,21 +1267,6 @@
                (ispell-change-dictionary "norsk")
                (local-set-key (kbd "C-c b") 'insert-markdown-inline-math-block)) t)
    #+END_SRC
-
-** Python
-
-   # [[http://tkf.github.io/emacs-jedi/released/][Jedi]] offers very nice auto completion for =python-mode=. Mind that it is
-   # dependent on some python programs as well, so make sure you follow the
-   # instructions from the site.
-
-   # #+BEGIN_SRC emacs-lisp
-   # ;; (setq jedi:server-command
-   # ;;       (cons "python3" (cdr jedi:server-command))
-   # ;;       python-shell-interpreter "python3")
-   # (add-hook 'python-mode-hook 'jedi:setup)
-   # (setq jedi:complete-on-dot t)
-   # (add-hook 'python-mode-hook 'jedi:ac-setup)
-   # #+END_SRC
 
 ** Haskell
 
@@ -1290,6 +1359,7 @@
   (define-key custom-bindings-map (kbd "M-y")     'helm-show-kill-ring)
   (define-key custom-bindings-map (kbd "C-x b")   'helm-mini)
   (define-key custom-bindings-map (kbd "C-x C-f") 'helm-find-files)
+  (define-key custom-bindings-map (kbd "C-c h d") 'helm-dash-at-point)
   (define-key custom-bindings-map (kbd "C-c h o") 'helm-occur)
   (define-key custom-bindings-map (kbd "C-c h g") 'helm-google-suggest)
   (define-key custom-bindings-map (kbd "M-i")     'helm-swoop)
@@ -1332,10 +1402,13 @@
   (define-key custom-bindings-map (kbd "C-c C-=") 'global-scale-up)
   (define-key custom-bindings-map (kbd "C-c C-+") 'global-scale-up)
   (define-key custom-bindings-map (kbd "C-c C--") 'global-scale-down)
-  (define-key custom-bindings-map (kbd "C-x t")   'toggle-shell)
   (define-key custom-bindings-map (kbd "C-c j")   'cycle-spacing-delete-newlines)
   (define-key custom-bindings-map (kbd "C-c d")   'duplicate-thing)
   (define-key custom-bindings-map (kbd "<C-tab>") 'tidy)
+  (define-key custom-bindings-map (kbd "M-§")     'toggle-shell)
+  (dolist (n (number-sequence 1 9))
+    (global-set-key (kbd (concat "M-" (int-to-string n)))
+                    (lambda () (interactive) (switch-shell n))))
   (define-key custom-bindings-map (kbd "C-c C-q")
     '(lambda ()
        (interactive)
